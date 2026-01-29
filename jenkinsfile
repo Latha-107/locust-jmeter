@@ -1,0 +1,78 @@
+pipeline {
+    agent any
+    
+    parameters {
+        choice(
+            name: 'CI_TOOL',
+            choices: ['github', 'gitlab', 'bitbucket'],
+            description: 'Select CI/CD tool to trigger'
+        )
+    }
+    
+    environment {
+        GITHUB_TOKEN           = credentials('GITHUB_TOKEN')
+        GITLAB_TOKEN           = credentials('GITLAB_TOKEN')
+        BITBUCKET_USERNAME     = credentials('BITBUCKET_USERNAME')
+        BITBUCKET_APP_PASSWORD = credentials('BITBUCKET_APP_PASSWORD')
+    }
+    
+    stages {
+        stage('Setup') {
+            steps {
+                echo "Setting up environment..."
+                sh 'python3 --version'
+                sh 'pip3 --version'
+            }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                echo "Installing Python dependencies..."
+                sh 'pip3 install requests --break-system-packages || pip3 install requests'
+            }
+        }
+        
+        stage('Trigger CI/CD Pipeline') {
+            steps {
+                script {
+                    echo "Selected CI/CD Tool: ${params.CI_TOOL}"
+                    
+                    switch(params.CI_TOOL) {
+                        case 'github':
+                            echo "Triggering GitHub Actions..."
+                            sh 'chmod +x jenkins/trigger-scripts/trigger-github.py'
+                            sh 'python3 jenkins/trigger-scripts/trigger-github.py'
+                            break
+                            
+                        case 'gitlab':
+                            echo "Triggering GitLab CI/CD..."
+                            sh 'chmod +x jenkins/trigger-scripts/trigger-gitlab.py'
+                            sh 'python3 jenkins/trigger-scripts/trigger-gitlab.py'
+                            break
+                            
+                        case 'bitbucket':
+                            echo "Triggering Bitbucket Pipelines..."
+                            sh 'chmod +x jenkins/trigger-scripts/trigger-bitbucket.py'
+                            sh 'python3 jenkins/trigger-scripts/trigger-bitbucket.py'
+                            break
+                            
+                        default:
+                            error("Invalid CI/CD tool selected: ${params.CI_TOOL}")
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "Pipeline triggered successfully!"
+        }
+        failure {
+            echo "Pipeline trigger failed!"
+        }
+        always {
+            cleanWs()
+        }
+    }
+}
